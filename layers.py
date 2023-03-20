@@ -5,6 +5,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
     """
     Multi-head attention layer.
     """
+
     def __init__(self, dm, dk, dv, num_heads):
         """
         Multi-head attention implementation
@@ -69,7 +70,8 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         value_mat = tf.einsum('...ij,...jk->...ik', v, wv)  # (batch_size, num_heads, key_length, dv)
 
         scaled_val, attention = self._scale_dot_product_attention(key_mat, query_mat,
-            value_mat, mask)  # (batch_size, num_heads, query_length, dv)
+                                                                  value_mat,
+                                                                  mask)  # (batch_size, num_heads, query_length, dv)
         scaled_val = tf.transpose(scaled_val, [0, 2, 1, 3])
         scaled_val = tf.reshape(scaled_val, [batch_size, query_length, self.val_dim * self.num_heads])
         output = tf.matmul(scaled_val, self.wo)
@@ -82,6 +84,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
     Encoder layer in transformer architecture.
     For more info, we can refer to this paper: https://arxiv.org/pdf/1706.03762.pdf
     """
+
     def __init__(self, dm, dk, dv, epsilon=1e-6, nhidden=32, num_head=8, dropout=0.1):
         super(TransformerEncoderLayer, self).__init__()
         self.layer_norm1 = tf.keras.layers.LayerNormalization(epsilon=epsilon)
@@ -103,3 +106,54 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         if output_attention:
             return inputs, attention
         return inputs
+
+
+class AutoDis(tf.keras.layers.Layer):
+    """
+    Auto discretize layer for numeric features.
+    For more info, we can refer to this paper https://arxiv.org/pdf/2012.08986.pdf
+    """
+    def __init__(
+            self,
+            emb_size=32,
+            num_buckets=20,
+            temperature=0.0001,
+            alpha=0.1,
+            leaky_alpha=0.3,
+            seed=42
+    ):
+        """
+        Auto discretize layer
+        :param emb_size: Final embedding dimension size.
+        :param num_buckets: Number of buckets for aggregation.
+        :param temperature: Temperature value for logit outputs.
+        :param alpha: Control factor of skip-connection.
+        :param leaky_alpha: Alpha param for leaky activation.
+        :param seed: A seed number of weight initialization.
+        """
+        super(AutoDis, self).__init__()
+        self.num_buckets = num_buckets
+        self.emb_size = emb_size
+        self.temperature = temperature
+        self.alpha = alpha
+
+        self.meta_emb = self.add_weight("meta_emb",
+                                        shape=[num_buckets, emb_size],
+                                        trainable=True,
+                                        initializer=tf.keras.initializers.GlorotNormal(seed=seed))  # num_buckets x dim
+        self.fc1 = tf.keras.layers.Dense(num_buckets)
+        self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=leaky_alpha)
+        self.fc2 = tf.keras.layers.Dense(num_buckets)
+
+    def call(self, x_dense):
+        """
+        Return embedding for a numeric feature.
+        :param x_dense: Numeric feature with shape (batch_size, 1)
+        :return: Feature embedding with shape (batch_size, dimension)
+        """
+        logits = self.leaky_relu(self.fc1(x_dense))  # batch_size x num_buckets
+        logits = self.fc2(logits) + self.alpha * logits  # batch_size x num_buckets
+        output = tf.nn.softmax(logits / self.temperature, axis=-1)  # batch_size x num_buckets
+        x_emb = tf.linalg.matmul(output, self.meta_emb)  # batch_size x emb_dim
+
+        return x_emb
