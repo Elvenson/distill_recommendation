@@ -16,9 +16,8 @@ pip install -r requirements.txt
 
 ## References
 - Transformer layer: [Paper](https://arxiv.org/pdf/1706.03762.pdf), 
-[simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/baobui/transformer/layers.py#L80), 
+[simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/main/layers.py#L82), 
 [visual explanation](http://jalammar.github.io/illustrated-transformer/), 
 [tensorflow tutorial](https://www.tensorflow.org/text/tutorials/transformer).
 - Auto discretize layer: [Paper](https://arxiv.org/pdf/2012.08986.pdf),
-[simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/baobui/autodis/layers.py#L111).
-
+[simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/main/layers.py#L111).
