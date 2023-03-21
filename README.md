@@ -21,3 +21,8 @@ pip install -r requirements.txt
 [tensorflow tutorial](https://www.tensorflow.org/text/tutorials/transformer).
 - Auto discretize layer: [Paper](https://arxiv.org/pdf/2012.08986.pdf),
 [simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/main/layers.py#L111).
+- Batch Normalization layer: [Paper](https://arxiv.org/pdf/1502.03167.pdf),
+[visual explanation](https://towardsdatascience.com/batch-norm-explained-visually-how-it-works-and-why-neural-networks-need-it-b18919692739),
+[official implementation](https://www.tensorflow.org/api_docs/python/tf/keras/layers/BatchNormalization).
+- Layer Normalization layer: [Paper](https://arxiv.org/pdf/1607.06450.pdf),
+[official implementation](https://www.tensorflow.org/api_docs/python/tf/keras/layers/LayerNormalization).
