@@ -113,6 +113,7 @@ class AutoDis(tf.keras.layers.Layer):
     Auto discretize layer for numeric features.
     For more info, we can refer to this paper https://arxiv.org/pdf/2012.08986.pdf
     """
+
     def __init__(
             self,
             emb_size=32,
@@ -145,15 +146,78 @@ class AutoDis(tf.keras.layers.Layer):
         self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=leaky_alpha)
         self.fc2 = tf.keras.layers.Dense(num_buckets)
 
-    def call(self, x_dense):
+    def call(self, inputs):
         """
         Return embedding for a numeric feature.
-        :param x_dense: Numeric feature with shape (batch_size, 1)
+        :param inputs: Numeric feature with shape (batch_size, 1)
         :return: Feature embedding with shape (batch_size, dimension)
         """
-        logits = self.leaky_relu(self.fc1(x_dense))  # batch_size x num_buckets
+        logits = self.leaky_relu(self.fc1(inputs))  # batch_size x num_buckets
         logits = self.fc2(logits) + self.alpha * logits  # batch_size x num_buckets
         output = tf.nn.softmax(logits / self.temperature, axis=-1)  # batch_size x num_buckets
         x_emb = tf.linalg.matmul(output, self.meta_emb)  # batch_size x emb_dim
 
         return x_emb
+
+
+class BatchNorm(tf.keras.layers.Layer):
+    """
+    Batch Normalization layer implementation.
+    For more detail, we can refer to this paper https://arxiv.org/pdf/1502.03167.pdf
+    """
+
+    def __init__(self, epsilon=0.001, momentum=0.99):
+        super(BatchNorm, self).__init__()
+        self.epsilon = epsilon
+        self.momentum = tf.constant([[momentum]], dtype=tf.float32)
+
+    def build(self, input_shape):
+        self.beta = self.add_weight(shape=(input_shape[1]), initializer='zeros', trainable=True)
+        self.gamma = self.add_weight(shape=(input_shape[1]), initializer='ones', trainable=True)
+        self.moving_mean = self.add_weight(shape=(1, input_shape[1]), initializer='zeros', trainable=False)
+        self.moving_var = self.add_weight(shape=(1, input_shape[1]), initializer='ones', trainable=False)
+
+    def call(self, inputs, training=False):
+        """
+        Batch normalize layer.
+        :param inputs: Input data with shape (batch_size, dim)
+        :param training: A flag to know if this is training or inference.
+        :return: Batch normalize output.
+        """
+        if training:
+            mean, var = tf.nn.moments(inputs, axes=[0], keepdims=True)  # (1, dim)
+            moving_mean = self.momentum * self.moving_mean + (1 - self.momentum) * mean  # (1, dim)
+            moving_var = self.momentum * self.moving_var + (1 - self.momentum) * var  # (1, dim)
+            self.moving_mean.assign(moving_mean)
+            self.moving_var.assign(moving_var)
+            normalized_input = (inputs - mean) / tf.math.sqrt(var + self.epsilon)  # (batch_size, dim)
+
+            return normalized_input * self.gamma + self.beta
+        else:
+            normalized_input = (inputs - self.moving_mean) / tf.math.sqrt(self.moving_var + self.epsilon)
+            return normalized_input * self.gamma + self.beta
+
+
+class LayerNorm(tf.keras.layers.Layer):
+    """
+    Layer normalization implementation.
+    For more info, we can refer to this paper https://arxiv.org/pdf/1607.06450.pdf
+    """
+
+    def __init__(self, epsilon=0.01):
+        super(LayerNorm, self).__init__()
+        self.epsilon = epsilon
+
+    def build(self, input_shape):
+        self.beta = self.add_weight(shape=(input_shape[0], 1), initializer='zeros', trainable=True)
+        self.gamma = self.add_weight(shape=(input_shape[0], 1), initializer='ones', trainable=True)
+
+    def call(self, inputs):
+        """
+        Layer norm layer.
+        :param inputs: Input data with shape (batch_size, dim)
+        :return: Layer normalize output.
+        """
+        mean, var = tf.nn.moments(inputs, axes=[-1], keepdims=True)  # (batch_size, 1)
+        normalized_input = (inputs - mean) / tf.math.sqrt(var + self.epsilon)  # (batch_size, dim)
+        return normalized_input * self.gamma + self.beta
