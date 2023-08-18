@@ -1,4 +1,5 @@
 import tensorflow as tf
+from keras.layers import Embedding
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):
@@ -82,7 +83,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 class TransformerEncoderLayer(tf.keras.layers.Layer):
     """
     Encoder layer in transformer architecture.
-    For more info, we can refer to this paper: https://arxiv.org/pdf/1706.03762.pdf
+    For more info, we can refer to this paper: https://arxiv.org/pdf/1706.03762.pdf.
     """
 
     def __init__(self, dm, dk, dv, epsilon=1e-6, nhidden=32, num_head=8, dropout=0.1):
@@ -111,51 +112,57 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
 class AutoDis(tf.keras.layers.Layer):
     """
     Auto discretize layer for numeric features.
-    For more info, we can refer to this paper https://arxiv.org/pdf/2012.08986.pdf
+    For more info, we can refer to this paper https://arxiv.org/pdf/2012.08986.pdf.
     """
 
     def __init__(
             self,
-            emb_size=32,
-            num_buckets=20,
-            temperature=0.0001,
-            alpha=0.1,
-            leaky_alpha=0.3,
-            seed=42
+            emb_size,
+            autodis_num_bins=8,
+            temperature=1,
+            alpha=0.1
     ):
         """
         Auto discretize layer
         :param emb_size: Final embedding dimension size.
-        :param num_buckets: Number of buckets for aggregation.
+        :param autodis_num_bins: Number of bin for auto discretize layer.
         :param temperature: Temperature value for logit outputs.
         :param alpha: Control factor of skip-connection.
-        :param leaky_alpha: Alpha param for leaky activation.
-        :param seed: A seed number of weight initialization.
         """
         super(AutoDis, self).__init__()
-        self.num_buckets = num_buckets
         self.emb_size = emb_size
         self.temperature = temperature
+
+        self.autodis_meta_emb = self.add_weight("autodis_meta_emb",  # num_bin x dim
+                                                shape=[autodis_num_bins, emb_size],
+                                                trainable=True)
+        self.autodis_discrete = tf.keras.layers.Dense(autodis_num_bins)
+        self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=0.3)
+        self.fc2 = tf.keras.layers.Dense(autodis_num_bins)
         self.alpha = alpha
 
-        self.meta_emb = self.add_weight("meta_emb",
-                                        shape=[num_buckets, emb_size],
-                                        trainable=True,
-                                        initializer=tf.keras.initializers.GlorotNormal(seed=seed))  # num_buckets x dim
-        self.fc1 = tf.keras.layers.Dense(num_buckets)
-        self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=leaky_alpha)
-        self.fc2 = tf.keras.layers.Dense(num_buckets)
+    def build(self, input_shape):
+        self.ranks = len(input_shape)
 
-    def call(self, inputs):
+    def call(self, x_dense):
         """
-        Return embedding for a numeric feature.
-        :param inputs: Numeric feature with shape (batch_size, 1)
-        :return: Feature embedding with shape (batch_size, dimension)
+        Return embedding for numeric feature.
+        :param x_dense: Numeric features with shape (batch_size, 1) or shape (batch_size, timestamp, 1)
+        :return: Feature embedding with shape (batch_size, dimension) or shape (batch_size, timestamp, dimension)
         """
-        logits = self.leaky_relu(self.fc1(inputs))  # batch_size x num_buckets
-        logits = self.fc2(logits) + self.alpha * logits  # batch_size x num_buckets
-        output = tf.nn.softmax(logits / self.temperature, axis=-1)  # batch_size x num_buckets
-        x_emb = tf.linalg.matmul(output, self.meta_emb)  # batch_size x emb_dim
+        if self.ranks != 2 and self.ranks != 3:
+            raise ValueError("Unsupported tensor with shape {}".format(x_dense.shape))
+        if self.ranks == 2:
+            x_dense = tf.expand_dims(x_dense, -1)
+        autodis_logits = self.autodis_discrete(x_dense)
+        autodis_logits = self.leaky_relu(autodis_logits)
+        autodis_logits = self.fc2(autodis_logits) + self.alpha * autodis_logits
+        autodis_logits = tf.nn.softmax(autodis_logits / self.temperature,
+                                       axis=-1)  # batch_size x 1 or timesteps x num_bin
+        x_emb = tf.einsum("bij, jk -> bik", autodis_logits, self.autodis_meta_emb)  # batch_size x dim
+
+        if self.ranks == 2:
+            x_emb = tf.squeeze(x_emb, axis=1)
 
         return x_emb
 
@@ -163,7 +170,7 @@ class AutoDis(tf.keras.layers.Layer):
 class BatchNorm(tf.keras.layers.Layer):
     """
     Batch Normalization layer implementation.
-    For more detail, we can refer to this paper https://arxiv.org/pdf/1502.03167.pdf
+    For more detail, we can refer to this paper https://arxiv.org/pdf/1502.03167.pdf.
     """
 
     def __init__(self, epsilon=0.001, momentum=0.99):
@@ -201,7 +208,7 @@ class BatchNorm(tf.keras.layers.Layer):
 class LayerNorm(tf.keras.layers.Layer):
     """
     Layer normalization implementation.
-    For more info, we can refer to this paper https://arxiv.org/pdf/1607.06450.pdf
+    For more info, we can refer to this paper https://arxiv.org/pdf/1607.06450.pdf.
     """
 
     def __init__(self, epsilon=0.01):
@@ -221,3 +228,41 @@ class LayerNorm(tf.keras.layers.Layer):
         mean, var = tf.nn.moments(inputs, axes=[-1], keepdims=True)  # (batch_size, 1)
         normalized_input = (inputs - mean) / tf.math.sqrt(var + self.epsilon)  # (batch_size, dim)
         return normalized_input * self.gamma + self.beta
+
+
+class CompositeEmbedding(tf.keras.layers.Layer):
+    """
+    Compositional embedding layer.
+    For more info, we can refer to this paper https://arxiv.org/pdf/1909.02107.pdf.
+    param nvoc: An integer represents the vocabulary size.
+    param emb_dim: An integer represents embedding size.
+    """
+
+    def __init__(self, nvoc, emb_dim, *args, **kwargs):
+        super(CompositeEmbedding, self).__init__(*args, **kwargs)
+        self.nvoc = nvoc
+        self.composite1 = Embedding(self.nvoc + 1, emb_dim, name="composite_1")
+        self.composite2 = Embedding(self.nvoc + 1, emb_dim, name="composite_2")
+        self.hashing_layer1 = tf.keras.layers.Hashing(num_bins=nvoc + 1, mask_value="0", salt=[6971, 7321])
+        self.hashing_layer2 = tf.keras.layers.Hashing(num_bins=nvoc + 1, mask_value="0", salt=[7723, 7507])
+
+    def build(self, input_shape):
+        super(CompositeEmbedding, self).build(input_shape)
+
+    def call(self, x):
+        """
+        Generate embedding based on tensor value.
+        param x: A tensor of shape (batch_size, ).
+        return An embedding tensor with shape (batch_size, emb_dim).
+        """
+        if x.dtype != tf.string:
+            x = tf.as_string(x)
+
+        idx1 = self.hashing_layer1(x)
+        idx2 = self.hashing_layer2(x)
+
+        x1 = self.composite1(idx1)
+        x2 = self.composite2(idx2)
+        emb = tf.einsum("...i,...i->...i", x1, x2)
+
+        return emb
