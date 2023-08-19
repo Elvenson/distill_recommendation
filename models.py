@@ -48,7 +48,7 @@ class CandidateModel(tf.keras.Model):
         super().__init__()
         self.config = config
 
-        # Embedding layers are share between query and candidate models.
+        # Embedding layers are shared between query and candidate models.
         self.item_emb = query_model.item_emb
         self.item_age_emb = query_model.item_age_emb
         self.item_gender_emb = query_model.item_gender_emb

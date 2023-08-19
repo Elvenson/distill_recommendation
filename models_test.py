@@ -8,7 +8,7 @@ BATCH_SIZE = 5
 
 def _get_dummy_config():
     """
-    Generate dummy config to initialize model.
+    Generate a dummy config to initialise the model.
     :return: A dictionary contains model config.
     """
     return dict(
@@ -51,7 +51,7 @@ class ModelTest(tf.test.TestCase):
         model.compile(optimizer=tf.keras.optimizers.Adam(0.1))
         model_history = model.fit(
             dataset,
-            validation_data=dataset,  # Just for testing, for real data we should use different dataset.
+            validation_data=dataset,  # Just for testing, for real data, we should use different datasets.
             validation_freq=1,
             epochs=1,
             verbose=1
