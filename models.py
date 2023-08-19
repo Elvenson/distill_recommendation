@@ -76,7 +76,7 @@ class CandidateModel(tf.keras.Model):
 
 class TwoTowerModel(Model):
     """
-    A simple two tower model.
+    A simple two-tower model for vector recall.
     """
 
     def __init__(self, config):
