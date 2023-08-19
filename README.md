@@ -28,3 +28,7 @@ pip install -r requirements.txt
 - Layer Normalization layer: [Paper](https://arxiv.org/pdf/1607.06450.pdf),
 [official implementation](https://www.tensorflow.org/api_docs/python/tf/keras/layers/LayerNormalization),
 [simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/main/layers.py#L201).
+- Compositional embedding layer: [Paper](https://arxiv.org/pdf/1909.02107.pdf), 
+[simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/baobui/twotower/layers.py#L233).
+- Two-tower model: [Reference](https://www.tensorflow.org/recommenders/examples/basic_retrieval),
+[simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/baobui/twotower/models_test.py#L45).
