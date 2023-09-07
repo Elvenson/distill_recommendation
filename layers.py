@@ -266,3 +266,35 @@ class CompositeEmbedding(tf.keras.layers.Layer):
         emb = tf.einsum("...i,...i->...i", x1, x2)
 
         return emb
+
+
+class SENet(tf.keras.layers.Layer):
+    """
+    Squeeze-Excitation network (SENET) architecture.
+    For more info, we can refer to this paper: https://arxiv.org/pdf/1905.09433.pdf.
+    """
+
+    def __init__(self, reduction_ratio):
+        super(SENet, self).__init__()
+
+        self.reduction_ratio = reduction_ratio
+
+    def build(self, input_shape):
+        num_feats = input_shape[1]
+        self.dense1 = tf.keras.layers.Dense(num_feats // self.reduction_ratio,
+                                            activation=tf.keras.layers.ReLU(),
+                                            use_bias=False,
+                                            kernel_initializer=tf.initializers.he_normal)
+        self.dense2 = tf.keras.layers.Dense(num_feats,
+                                            activation=tf.keras.layers.ReLU(),
+                                            use_bias=False,
+                                            kernel_initializer=tf.initializers.he_normal)
+
+    def call(self, inputs):
+        """
+        :param inputs: Input features with shape (batch_size, num_feature, dim).
+        :return: Tensor with output (batch_size, num_feature, dim).
+        """
+        z = tf.reduce_mean(inputs, axis=-1)  # batch_size, num_feature
+        w = self.dense2(self.dense1(z))  # batch_size, num_feature
+        return inputs * tf.expand_dims(w, axis=-1)
