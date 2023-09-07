@@ -271,7 +271,7 @@ class CompositeEmbedding(tf.keras.layers.Layer):
 class SENet(tf.keras.layers.Layer):
     """
     Squeeze-Excitation network (SENET) architecture.
-    For more info, we can refer to this paper: https://arxiv.org/pdf/1905.09433.pdf
+    For more info, we can refer to this paper: https://arxiv.org/pdf/1905.09433.pdf.
     """
 
     def __init__(self, reduction_ratio):

@@ -40,4 +40,4 @@ pip install -r requirements.txt
 - Two-tower model: [Reference](https://www.tensorflow.org/recommenders/examples/basic_retrieval),
   [simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/baobui/twotower/models_test.py#L45).
 - Squeeze-Excitation network (SENET): [Paper](https://arxiv.org/pdf/1905.09433.pdf),
-  [simplified implementation]().
+  [simplified implementation](https://github.com/Elvenson/distill_recommendation/blob/baobui/senet/layers.py#L271).
